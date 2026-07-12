@@ -23,6 +23,7 @@
 #include <includes/main/util/elf/elf_loader.h>
 #include "includes/main/module/modsym.h"
 #include "includes/main/module/module.h"
+#include "includes/main/cpu/sched.h"
 #include "drivers/includes/acpi/acpi.h"
 #include "drivers/includes/acpi/acpi_fadt.h"
 #include "drivers/includes/acpi/acpi_shtdwn.h"
@@ -203,7 +204,12 @@ void kmain(void) {
 
     load_elfs_in_dir(mnt, "/");
 
-    
+    sched_init();
+
+    extern void test_tasks_init(void);
+    test_tasks_init();
+
+    sched_start();
 
 halt:
     while (1) {}
