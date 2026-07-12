@@ -1,0 +1,24 @@
+Version 0.0.5-pre:
+
+Current features (list): 
+
+ISR, IDT, GDT and I/O
+ACPI
+VFS
+RAMFS
+APIC
+PMM & VMM & PFNDB
+Modulization
+Math & other utilities
+ATA, ATAPI, SATA/AHCI, CDROM, PCI, and Floppy support
+*HCI Detection
+Serial printing & input
+
+---------------------------------------------------------------------------------
+Version 0.1.5:
+
+CHANGES since version 0.0.5-pre:
+
+- Added exFAT filesystem
+- Overhauled previous module loading for recursive module loading
+- Added storage stubs in sata.c for compatibility
