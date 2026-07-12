@@ -49,8 +49,4 @@ A maintainer will review your changes and either accept or deny them with detail
 Most of this project is licensed and shipped under EUPL 1.2 as seen in the LICENSE file, but some code snippets/files may be subject to different licenses. 
 Please refer to the file contents and the disclaimer at the top of the file for more information.
 
----
-## Disclaimer
-This OS uses Doxygen for its documentation. For more information on this project, refer to the link below:
-https://github.com/doxygen/doxygen
 
