@@ -11,6 +11,9 @@
 #define APIC_IRR_BASE               0x200
 #define APIC_TPR                    0x080
 #define APIC_LVT_TIMER              0x320
+#define APIC_TIMER_INITIAL_COUNT    0x380
+#define APIC_TIMER_CURRENT_COUNT    0x390
+#define APIC_TIMER_DIVIDE           0x3E0
 #define APIC_LVT_LINT0              0x350
 #define APIC_LVT_LINT1              0x360
 
