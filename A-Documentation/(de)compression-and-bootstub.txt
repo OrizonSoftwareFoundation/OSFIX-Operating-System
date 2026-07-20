@@ -1,0 +1,92 @@
+Author: Yazin T.
+
+
+    (De)compression and Bootstub documentation
+
+
+Many moons ago, a smart man writing a kernel decided to implement kernel compression to save space
+when loading the kernel. That man was Linus Torvalds. I've decided to further his legacy in almost
+the same way.
+
+In this text file, you will find the blood, sweat, and tears i have poured into this very endeavour
+in the name of portability and compactibility.
+
+
+
+Here are some common questions i was asked when implementing kernel compression:
+
+
+
+1: Why implement kernel (de)compression?
+
+A question as old as time itself. Implementing kernel compression offers a smaller boot image, 
+offers faster loading into memory, takes up less bandwidth on PXE/network booting environments, 
+and is overall a better way to package a kernel if you are sensitive about memory footprint,
+like i am.
+
+
+
+2: Doesn't kernel decompression slow boot?
+
+Not by much. Modern hardware can decompress compression algorithims such as LZ4 (the one i'm using),
+Zstd, and gzip in less than a millisecond if your implementation is optimized for performance.
+
+
+
+3: Is implementing (de)compression complicated?
+
+Somewhat. You need to figure out certain aspects in order to properly implement compression, such as
+memory management, how to shove the kernel and decompressor into a single ELF file (if you want it like that),
+how to make them not corrupt eachother, etc.. Point is, yes, it's complicated if you don't know what you're doing
+(like me). Take the opportunity to use my code for YOUR VERY OWN kernel. I needed that the most when i was 
+implementing it myself.
+
+
+
+4: Why did you choose LZ4?
+
+I primarily chose LZ4 for its stupidly fast decompression rates and tunability. That said, you should choose a 
+compression algorithim on how fast you want your kernel to decompress, and how small you want your kernel.
+
+
+
+Now, onto the actual inner-workings of our decompressor.
+
+A top down explanation of how this decompressor works, the issues to fix, and a little diagram for visual learners.
+
+Firstly, Limine loads the ckImage (ELF file, stands for "compressed kernel Image") into memory. Once Limine loads the
+ckImage into memory, the decompressor starts up, gets memory access, HHDM offsets, etc.. from Limine, decompresses the kernel, 
+then hands the kernel everything it needs to begin its journey.
+
+ISSUE: Limine only hands memory access, HHDM offsets, etc.. to the first thing loaded in memory, which is in this case, 
+our decompressor bootstub. This becomes a MAJOR issue if you don't setup your decompressor to hand everything to the kernel
+after its done decompressing it. Cue many, many, many page faults and errors i've never dealt with in my entire OSDev journey.
+
+The fix: Make your decompressor hand down everything it got from Limine to your kernel after it decompresses the image you handed it.
+In other terms, have your decompressor bootstub copy the structs that Limine provides you into a fixed location, or pass it via 
+registers/the stack before jumping to the main kernel function. 
+
+Diagram:
+Limine (hands access to mostly everything) -> Decompressor bootstub (hands access passed down from Limine) -> kernel 
+
+
+Moving onto another topic, you might be asking me "Well how does the ELF look like?", and to that i respond with another diagram.
+
+This is a very dumb'ed down version of how the ELF file is structured:
+
+[START]
+[Decompressor code, gets loaded by Limine first]
+                    |
+                    v
+ Hands down management once the kernel is decompresses
+                    |
+                    v
+[Compressed Kernel Image, waiting to be unpacked by the decompressor]
+                    |
+                    v
+[A bunch of whitespace and whatnot (i haven't inspected my own ELF yet)]
+                    |
+                    v
+[END]
+
+More to documentation to come.
