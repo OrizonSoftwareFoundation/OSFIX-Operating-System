@@ -2,7 +2,7 @@
 //License: Apache License 2.0
 //Source: https://github.com/kevinalavik/lyr/blob/main/kernel/src/mm/pfndb.c
 
-//Edited by Yazin T. for better compatibility with OSFIX
+//Edited by Yazin Tantawi for better compatibility with OSFIX
 #include "includes/pfndb.h"
 #include "includes/pmm.h"
 #include "includes/vmm.h"

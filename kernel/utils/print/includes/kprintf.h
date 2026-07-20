@@ -1,4 +1,4 @@
-//Yazin T.
+//Yazin Tantawi
 #ifndef KPRINTF_H
 #define KPRINTF_H
 

@@ -18,7 +18,7 @@ ENTRY(_stub_start)
  
   physical (LMA) addresses mirror the virtual offsets 1:1 below 2GiB;
   same convention the previous single executable kernel/linker.ld used.
- -Yazin T. */
+ -Yazin Tantawi */
 
 STUB_VMA_OFFSET = 0xffffffff80000000;
 STUB_LMA_BASE   = 0x100000;
@@ -41,7 +41,7 @@ PHDRS
     /* RWX: the real kernel's .text/.rodata/.data/.bss are all flattened
        into this one blob and decompressed as one memcpy, so this single segment 
        has to cover the executable part too (bit 0 = PF_X). this gives up W^X for 
-       the real kernel as a whole for now. -The big T.*/
+       the real kernel as a whole for now. -Yazin Tantawi*/
        
     ktarget PT_LOAD    FLAGS((1 << 0) | (1 << 1) | (1 << 2)) ;
 }
@@ -78,7 +78,7 @@ SECTIONS
 
     /* fixed address limine request structs. each gets its own output
        section pinned to an exact address so kernel/linker.ld can PROVIDE()
-       the same extern symbol names at the same addresses without additional info. -Yazin T.*/
+       the same extern symbol names at the same addresses without additional info. -Yazin Tantawi*/
 
     . = RSDP_REQ_VMA;
     .rsdp_request : AT(ADDR(.rsdp_request) - STUB_VMA_OFFSET) { KEEP(*(.rsdp_request)) } :reqs
@@ -94,7 +94,7 @@ SECTIONS
 
     /* reserved, zero filled target for the decompressed real kernel.
        NOLOAD => no file content; this is what lets us safely
-       write to this address from the stub without a page fault happening. -Yazin T.*/
+       write to this address from the stub without a page fault happening. -Yazin Tantawi*/
     
     . = KERNEL_TARGET_VMA;
     .kernel_target (NOLOAD) : AT(ADDR(.kernel_target) - STUB_VMA_OFFSET) {

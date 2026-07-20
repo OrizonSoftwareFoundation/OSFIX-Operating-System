@@ -2,7 +2,7 @@
 //License: Apache License 2.0
 //Source: https://github.com/kevinalavik/lyr/blob/main/kernel/include/mm/pfndb.h
 
-//Edited by Yazin T. for better compatibility with OSFIX
+//Edited by Yazin Tantawi for better compatibility with OSFIX
 #ifndef _LYR_MM_PFNDB_H
 #define _LYR_MM_PFNDB_H
 

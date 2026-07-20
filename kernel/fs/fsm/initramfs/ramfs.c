@@ -1,6 +1,6 @@
 /**
  @copyright (C) 2026 Orizon Software Foundation
- @author Yazin T.
+ @author Yazin Tantawi
  @license: EUPL 1.2
  */
 

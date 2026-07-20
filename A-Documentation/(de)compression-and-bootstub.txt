@@ -1,4 +1,4 @@
-Author: Yazin T.
+Author: Yazin Tantawi
 
 
     (De)compression and Bootstub documentation
@@ -66,11 +66,16 @@ The fix: Make your decompressor hand down everything it got from Limine to your 
 In other terms, have your decompressor bootstub copy the structs that Limine provides you into a fixed location, or pass it via 
 registers/the stack before jumping to the main kernel function. 
 
-Diagram:
+Think of it like this: Your bootstub and your kernel are in a room. Your kernel needs a bottle of water, and your bootstub is the only
+thing that can get a bottle of water. Your bootstub puts a bottle of water on the ground next to the kernel, and the kernel picks it up 
+and drinks it. Now, i know that wasn't the best of analogies, but yknow, it helps nonetheless.
+
+Here's a diagram if you're a visual learner:
 Limine (hands access to mostly everything) -> Decompressor bootstub (hands access passed down from Limine) -> kernel 
 
 
-Moving onto another topic, you might be asking me "Well how does the ELF look like?", and to that i respond with another diagram.
+
+Moving onto another topic, you might be asking me "Well, what does the ELF structure look like?", and to that i respond with... another diagram.
 
 This is a very dumb'ed down version of how the ELF file is structured:
 
@@ -78,7 +83,7 @@ This is a very dumb'ed down version of how the ELF file is structured:
 [Decompressor code, gets loaded by Limine first]
                     |
                     v
- Hands down management once the kernel is decompresses
+ Hands down management once the kernel is decompressed
                     |
                     v
 [Compressed Kernel Image, waiting to be unpacked by the decompressor]
@@ -88,5 +93,17 @@ This is a very dumb'ed down version of how the ELF file is structured:
                     |
                     v
 [END]
+
+You're more than welcome to inspect the ELF with a variety of your own tools. As to me? I'm too lazy. (joke)
+
+
+
+Files related to (de)compression:
+
+tools/lz4enc.c
+boot/stub/stub.c
+boot/stub/linker.ld 
+kernel/utils/decompressor/lz4.c 
+kernel/utils/decompressor/includes/lz4.h 
 
 More to documentation to come.

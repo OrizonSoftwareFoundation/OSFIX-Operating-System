@@ -1,4 +1,4 @@
-//Yazin T.
+//Yazin Tantawi
 
 #include <flanterm.h>
 #include <stdint.h>

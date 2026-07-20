@@ -1,6 +1,6 @@
 /**
  @copyright (C) 2026 Orizon Software Foundation
- @author Yazin T.
+ @author Yazin Tantawi
  @license: EUPL 1.2
  */
 
@@ -81,7 +81,7 @@ static uint32_t hex8_to_u32(const char *s)
 
 static inline const unsigned char *align4(const unsigned char *p)
 {
-    return (const unsigned char *)(((uintptr_t)p + 3ULL) & ~3ULL); //This one piece of shit function prevented AMD systems from resolving the initramfs. I don't even know what to say at this point. -one very pissed off Yazin T.
+    return (const unsigned char *)(((uintptr_t)p + 3ULL) & ~3ULL); //This one piece of shit function prevented AMD systems from resolving the initramfs. I don't even know what to say at this point. -one very pissed off Yazin Tantawi
 }
 
 static inline const unsigned char *limine_to_virt(void *ptr)

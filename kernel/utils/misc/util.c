@@ -1,4 +1,4 @@
-//Yazin T.
+//Yazin Tantawi
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>

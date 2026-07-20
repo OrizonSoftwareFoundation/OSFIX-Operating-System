@@ -1,4 +1,4 @@
-//Author: Yazin T.
+//Author: Yazin Tantawi
 //License: EUPL 1.2
 //Copyright (C) 2026,  Orizon Software Foundation
 

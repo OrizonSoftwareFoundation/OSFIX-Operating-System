@@ -29,7 +29,7 @@
  */
 
  
-//This code was modified by Yazin T. in order for it to achive freestanding abilities within OSFIX.
+//This code was modified by Yazin Tantawi in order for it to achive freestanding abilities within OSFIX.
 #include <stddef.h>
 #include <stdint.h>
 
