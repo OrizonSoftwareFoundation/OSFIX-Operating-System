@@ -12,8 +12,8 @@ KERNEL         := build/ckImage
 IMAGE          := OSFIX.img
 IMAGE_SIZE_MB  := 64
 
-OVMF_CODE := /usr/share/edk2/x64/OVMF_CODE.4m.fd
-OVMF_VARS := /usr/share/edk2/x64/OVMF_VARS.4m.fd
+OVMF_CODE := /usr/share/OVMF/OVMF_CODE_4M.fd
+OVMF_VARS := /usr/share/OVMF/OVMF_VARS_4M.fd
 
 CFLAGS  := -Iboot/limine \
            -Ikernel \
@@ -28,6 +28,10 @@ CFLAGS  := -Iboot/limine \
            -Ikernel/utils/time/includes \
            -Ikernel/fs/fsm/includes \
            -Ikernel/fs/fsm/includes/initramfs \
+		   -Ikernel/drivers/storage/includes \
+		   -Ikernel/drivers/hci/includes \
+		   -Ikernel/drivers/pci/includes \
+		   -Ikernel/drivers/pic/apic/includes \
            -Ibuild \
            -I. \
            -Wall -Wextra -std=gnu11 -ffreestanding -fno-stack-protector \
@@ -159,7 +163,7 @@ run: image
 		-drive if=pflash,format=raw,unit=0,file=$(OVMF_CODE),readonly=on \
 		-drive if=pflash,format=raw,unit=1,file=build/OVMF_VARS.fd \
 		-drive file=$(IMAGE),format=raw \
-		-serial stdio -m 512M
+		-serial stdio -m 1028M
 
 clean:
 	@rm -rf build $(IMAGE)

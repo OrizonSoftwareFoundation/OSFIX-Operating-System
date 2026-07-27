@@ -58,6 +58,19 @@ static void _pfndb_reserve(struct limine_memmap_response *mmap)
 void pfndb_init(struct limine_memmap_response *memmap)
 {
     _pfndb_calc_max_pfn(memmap);
+    log(Info, "PFNDB: max PFN is %u, database needs %u bytes\n",
+        max_pfn, (max_pfn + 1) * sizeof(page_t));
+
+    _pfndb_reserve(memmap);
+    log(Info, "PFNDB: reserved database at phys %x\n", pfndb_phys);
+
+    mem_map = (page_t *)phys_to_virt(pfndb_phys);
+    if (!mem_map) {
+        log(Fatal, "PFNDB: translation failed\n");
+        for (;;) __asm__ volatile("hlt");
+    }
+
+    _pfndb_calc_max_pfn(memmap);
     _pfndb_reserve(memmap);
     mem_map = (page_t *)phys_to_virt(pfndb_phys);
     
@@ -89,8 +102,7 @@ void pfndb_init(struct limine_memmap_response *memmap)
     mem_map[0].flags = PAGE_RESERVED;
     mem_map[0].refcount = 0;
     
-    log(Info, "PFNDB initialized with %d pages\n", (int)max_pfn);
-}
+log(Ok, "PFNDB initialized with %u pages\n", max_pfn + 1);}
 
 void pfndb_dump(void)
 {

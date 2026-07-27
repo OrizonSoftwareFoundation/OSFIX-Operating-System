@@ -132,12 +132,16 @@ void set_kernel_pml4(uint64_t *pml4) { kernel_pml4 = pml4; }
 void vmm_init(void)
 {
     hhdm_offset = pmm_get_hhdm_offset();
+
     uint64_t cr3;
     __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
     kernel_pml4 = (uint64_t *)phys_to_virt(cr3 & ~0xFFFULL);
+
+    log(Info, "VMM: using existing PML4 at phys %x (virt %p)\n",
+        cr3 & ~0xFFFULL, (void *)kernel_pml4);
+    log(Info, "VMM: HHDM offset is %x\n", hhdm_offset);
     log(Ok, "VMM initialized successfully\n");
 }
-
 uint64_t create_user_stack(uint64_t size)
 {
     uint64_t num_pages    = ALIGN_UP(size, PAGE_SIZE) / PAGE_SIZE;

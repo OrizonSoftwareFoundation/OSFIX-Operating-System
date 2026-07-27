@@ -11,12 +11,14 @@
 extern struct flanterm_context *global_flanterm;
 
 ISRHandler_t g_ISRHandlers[256];
-
 extern void ISR_InitializeGates();
+
+static volatile int in_panic = 0; //stops it from panicking over and over again
 
 void ISR_Initialize() {
     ISR_InitializeGates();
     ISR_RegisterHandler(14, page_fault_handler);
+
     for (int i = 0; i < 256; i++) {
         if (i != 14)
             IDT_EnableGate(i);
@@ -24,140 +26,169 @@ void ISR_Initialize() {
     log(Ok, "ISR initialized successfully\n");
 }
 
-static void dump_regs(Registers_t *regs) {
-    kprintf("------------------EXTENDED REGISTER REPORT-----------------\n");
-
-    uint64_t cr0, cr2, cr3, cr4;
-    uint64_t dr0, dr1, dr2, dr3, dr6, dr7;
-
-    struct { uint16_t limit; uint64_t base; } __attribute__((packed)) gdt, idt;
-
-    __asm__ volatile ("mov %%cr0,%0":"=r"(cr0));
-    __asm__ volatile ("mov %%cr2,%0":"=r"(cr2));
-    __asm__ volatile ("mov %%cr3,%0":"=r"(cr3));
-    __asm__ volatile ("mov %%cr4,%0":"=r"(cr4));
-
-    __asm__ volatile ("mov %%dr0,%0":"=r"(dr0));
-    __asm__ volatile ("mov %%dr1,%0":"=r"(dr1));
-    __asm__ volatile ("mov %%dr2,%0":"=r"(dr2));
-    __asm__ volatile ("mov %%dr3,%0":"=r"(dr3));
-    __asm__ volatile ("mov %%dr6,%0":"=r"(dr6));
-    __asm__ volatile ("mov %%dr7,%0":"=r"(dr7));
-
-    __asm__ volatile ("sgdt %0":"=m"(gdt));
-    __asm__ volatile ("sidt %0":"=m"(idt));
-
-    kprintf("  rax=%llx rbx=%llx rcx=%llx rdx=%llx\n"
-           "  rsi=%llx rdi=%llx rbp=%llx rsp=%llx\n"
-           "  r8=%llx r9=%llx r10=%llx r11=%llx\n"
-           "  r12=%llx r13=%llx r14=%llx r15=%llx\n"
-           "  rip=%llx rflags=%llx\n",
-        regs->rax, regs->rbx, regs->rcx, regs->rdx,
-        regs->rsi, regs->rdi, regs->rbp, regs->rsp,
-        regs->r8, regs->r9, regs->r10, regs->r11,
-        regs->r12, regs->r13, regs->r14, regs->r15,
-        regs->rip, regs->rflags);
-
-    kprintf("  cs=%llx ss=%llx\n", regs->cs, regs->ss);
-
-    kprintf("  cr0=%llx cr2=%llx cr3=%llx cr4=%llx\n", cr0, cr2, cr3, cr4);
-    kprintf("  dr0=%llx dr1=%llx dr2=%llx dr3=%llx dr6=%llx dr7=%llx\n",
-        dr0, dr1, dr2, dr3, dr6, dr7);
-
-    kprintf("  GDTR base=%llx limit=%x\n"
-           "  IDTR base=%llx limit=%x\n",
-        gdt.base, (uint32_t)gdt.limit,
-        idt.base, (uint32_t)idt.limit);
-
-    kprintf("  interrupt=%llu errorcode=%llx\n",
-        regs->interrupt, regs->error);
-    
-        
+static const char *exception_name(uint64_t n)
+{
+    static const char *names[] = {
+        "Divide-by-zero",
+        "Debug",
+        "Non-maskable interrupt",
+        "Breakpoint",
+        "Overflow",
+        "Bound range exceeded",
+        "Invalid opcode",
+        "Device not available",
+        "Double fault",
+        "Coprocessor segment overrun",
+        "Invalid TSS",
+        "Segment not present",
+        "Stack-segment fault",
+        "General protection fault",
+        "Page fault",
+        "Reserved",
+        "x87 floating-point exception",
+        "Alignment check",
+        "Machine check",
+        "SIMD floating-point exception",
+        "Virtualization exception",
+        "Control protection exception"
+    };
+    if (n < sizeof(names)/sizeof(names[0]))
+        return names[n];
+    return "Unknown";
 }
 
-static void print_verbose_isr_info(Registers_t *regs) {
-    const char *mode = (regs->cs & 3) == 3 ? "User Mode (Ring 3)" : "Kernel Mode (Ring 0)";
-
-    
-        uint64_t cr2;
-        __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
-
-        kprintf("\n--- EXCEPTION REPORT ---\n");
-        kprintf("[Context]\n");
-
-        kprintf("  Interrupt: %llu\n", regs->interrupt);
-
-        kprintf("\n[Execution]\n");
-        kprintf("  RIP: %llx\n", regs->rip);
-        kprintf("  Mode: %s\n", mode);
-        kprintf("  CS: %llx\n", regs->cs);
-
-        kprintf("\n[Memory Fault]\n");
-        kprintf("  CR2: %llx\n", cr2);
-        kprintf("  Error: %llx\n", regs->error);
-
-     if (regs->interrupt == 13) {
-        kprintf("\n[GP Fault]\n");
-        kprintf("  Error: %llx\n", regs->error);
+static void print_error_code(uint64_t vector, uint64_t err)
+{
+    if (vector == 14) { //page fault
+        kprintf("Error code: %llx\n", err);
+        kprintf("  [%c] Present\n",          (err & 1)  ? 'x' : ' ');
+        kprintf("  [%c] Write\n",            (err & 2)  ? 'x' : ' ');
+        kprintf("  [%c] User\n",             (err & 4)  ? 'x' : ' ');
+        kprintf("  [%c] Reserved bit\n",     (err & 8)  ? 'x' : ' ');
+        kprintf("  [%c] Instruction fetch\n",(err & 16) ? 'x' : ' ');
+        kprintf("  [%c] Protection key\n",   (err & 32) ? 'x' : ' ');
+        kprintf("  [%c] Shadow stack\n",     (err & 64) ? 'x' : ' ');
+    } else if (vector == 13) { //GPF
+        kprintf("Error code: %llx  ", err);
+        if (err == 0)
+            kprintf("(no segment selector)\n");
+        else
+            kprintf("(selector index related)\n");
+    } else if (err) {
+        kprintf("Error code: %llx\n", err);
     }
+}
 
-    kprintf("\n[Stack]\n");
+static void dump_registers(Registers_t *regs)
+{
+    uint64_t cr0, cr2, cr3, cr4;
+    __asm__ volatile ("mov %%cr0,%0" : "=r"(cr0));
+    __asm__ volatile ("mov %%cr2,%0" : "=r"(cr2));
+    __asm__ volatile ("mov %%cr3,%0" : "=r"(cr3));
+    __asm__ volatile ("mov %%cr4,%0" : "=r"(cr4));
+
+    kprintf("\nRegisters:\n");
+    kprintf("RAX: %016llx  RBX: %016llx  RCX: %016llx  RDX: %016llx\n",
+            regs->rax, regs->rbx, regs->rcx, regs->rdx);
+    kprintf("RSI: %016llx  RDI: %016llx  RBP: %016llx  RSP: %016llx\n",
+            regs->rsi, regs->rdi, regs->rbp, regs->rsp);
+    kprintf("R8:  %016llx  R9:  %016llx  R10: %016llx  R11: %016llx\n",
+            regs->r8,  regs->r9,  regs->r10, regs->r11);
+    kprintf("R12: %016llx  R13: %016llx  R14: %016llx  R15: %016llx\n",
+            regs->r12, regs->r13, regs->r14, regs->r15);
+    kprintf("RIP: %016llx  RFLAGS: %016llx\n", regs->rip, regs->rflags);
+    kprintf("CS: %04llx  SS: %04llx\n", regs->cs, regs->ss);
+    kprintf("CR0: %016llx  CR2: %016llx  CR3: %016llx  CR4: %016llx\n",
+            cr0, cr2, cr3, cr4);
+}
+
+static void print_call_trace(Registers_t *regs)
+{
+    kprintf("\nCall Trace:\n");
+    kprintf(" <TASK>\n");
 
     uint64_t *frame = (uint64_t *)regs->rbp;
     int depth = 0;
+    kprintf("  [<%016llx>] %s\n", regs->rip, "exception_entry");
 
-    while (frame && depth < 15) {
+    while (frame && depth < 20) {
         uint64_t ret = frame[1];
-        kprintf("  #%d: [<%llx>]\n", depth, ret);
 
-        if (!frame[0] || frame[0] <= (uint64_t)frame)
+        if (ret < 0x100000 || ret > 0xffffffff80000000ULL)
             break;
+        if (frame[0] <= (uint64_t)frame)
+            break;
+
+        kprintf("  [<%016llx>]\n", ret);
 
         frame = (uint64_t *)frame[0];
         depth++;
     }
+    kprintf(" </TASK>\n");
 }
 
-void ISR_Handler(Registers_t *regs) {
-   
 
+static void do_panic(Registers_t *regs, const char *extra_msg)
+{
+    if (in_panic) {
+        for (;;)
+            __asm__ volatile("cli; hlt");
+    }
+    in_panic = 1;
+
+    uint64_t cr2;
+    __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+
+    kprintf("\n");
+    kprintf("%CKERNEL PANIC%C\n", COLOR_RED, COLOR_DIM);
+
+    if (regs->interrupt == 14) {
+        kprintf("\nBUG: unable to handle kernel paging request at %016llx\n", cr2);
+    } else {
+        kprintf("\nBUG: %s\n", exception_name(regs->interrupt));
+    }
+
+    kprintf("Oops: %04llx [#1]\n", regs->error);
+    kprintf("CPU: 0, PID: 0, Comm: swapper\n");
+    kprintf("RIP: %04llx:[<%016llx>]\n", regs->cs, regs->rip);
+    kprintf("Code: (no disassembly yet)\n");
+
+    print_error_code(regs->interrupt, regs->error);
+    dump_registers(regs);
+    print_call_trace(regs);
+
+    if (extra_msg)
+        kprintf("\n%s\n", extra_msg);
+
+    kprintf("\n[ end Kernel panic - not syncing: Fatal exception ]\n");
+    halt();
+}
+
+void ISR_Handler(Registers_t *regs)
+{
     if (g_ISRHandlers[regs->interrupt]) {
         g_ISRHandlers[regs->interrupt](regs);
         return;
     }
 
-    if(regs->interrupt != 0){
-    kprintf("\n%CKERNEL PANIC!%C\n", COLOR_RED, COLOR_DIM);
-    kprintf("Unhandled interrupt %llu!\n", regs->interrupt);
-    }
-    else{
-    kprintf("\n%CKERNEL PANIC!%C\n", COLOR_RED, COLOR_DIM);
-    kprintf("Divide by Zero Error!\n", regs->interrupt);  
-    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "Unhandled exception %llu (%s)",
+              regs->interrupt, exception_name(regs->interrupt));
 
-    print_verbose_isr_info(regs);
-    dump_regs(regs);
-    halt();
+    do_panic(regs, buf);
+}
+void page_fault_handler(Registers_t *regs)
+{
+    do_panic(regs, "Page fault triggered, halting kernel...");
 }
 
-void page_fault_handler(Registers_t *regs) {
-    
-
-    kprintf("\n%CKERNEL PANIC!%C\n", COLOR_RED, COLOR_DIM);
-    printcol(COLOR_LIGHTRED, "PAGE FAULT!\n");
-
-    dump_regs(regs);
-    print_verbose_isr_info(regs);
-
-    halt();
-}
-
-void ISR_RegisterHandler(int interrupt, ISRHandler_t handler) {
+void ISR_RegisterHandler(int interrupt, ISRHandler_t handler)
+{
     g_ISRHandlers[interrupt] = handler;
     IDT_EnableGate(interrupt);
 }
 
-void kpanic(Registers_t *regs) {
-    dump_regs(regs);
-    halt();
+void kpanic(Registers_t *regs)
+{
+    do_panic(regs, "Explicit kpanic() called");
 }

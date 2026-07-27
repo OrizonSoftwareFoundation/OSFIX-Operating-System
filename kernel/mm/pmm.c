@@ -143,32 +143,53 @@ void pmm_init(void)
         log(Fatal, "PMM: HHDM not available\n");
         for (;;) __asm__ volatile("hlt");
     }
-    log(Info, "HHDM offset: %lx\n", hhdm_request.response->offset);
+    hhdm_offset = hhdm_request.response->offset;
+    log(Info, "HHDM offset: %x\n", hhdm_offset);
 
     if (!memmap_request.response) {
         log(Fatal, "PMM: memory map not available\n");
         for (;;) __asm__ volatile("hlt");
     }
-    log(Info, "Memory map entries: %d\n", memmap_request.response->entry_count);
 
-    hhdm_offset = hhdm_request.response->offset;
     struct limine_memmap_response *memmap = memmap_request.response;
+    log(Info, "Memory map: %u entries\n", memmap->entry_count);
 
+    //sum of usable memory
+    uint64_t usable_total = 0;
+    uint64_t usable_regions = 0;
+    for (uint64_t i = 0; i < memmap->entry_count; i++) {
+        struct limine_memmap_entry *e = memmap->entries[i];
+        if (e->type == LIMINE_MEMMAP_USABLE) {
+            usable_total += e->length;
+            usable_regions++;
+        }
+    }
+    log(Info, "Usable memory: %u MiB in %u regions\n",
+        usable_total >> 20, usable_regions);
+
+    //find the highest phys addr
     uint64_t top_addr = 0;
     for (uint64_t i = 0; i < memmap->entry_count; i++) {
         uint64_t end = memmap->entries[i]->base + memmap->entries[i]->length;
-        if (end > top_addr) top_addr = end;
+        if (end > top_addr)
+            top_addr = end;
     }
-
     pmm_max_page = top_addr / PAGE_SIZE;
+    log(Info, "highest physical address: %x, max page %u\n", top_addr, pmm_max_page);
+
     uint64_t bitmap_size = ALIGN_UP(pmm_max_page / 8, PAGE_SIZE);
 
     for (uint64_t i = 0; i < memmap->entry_count; i++) {
         struct limine_memmap_entry *e = memmap->entries[i];
         if (e->type != LIMINE_MEMMAP_USABLE || e->length < bitmap_size)
             continue;
+
         pmm_bitmap = (uint8_t *)(e->base + hhdm_offset);
-        memset(pmm_bitmap, 0xFF, bitmap_size);
+        memset(pmm_bitmap, 0xFF, bitmap_size);  //basically just mark everything used
+
+        log(Info, "Bitmap: %u KiB at phys %x\n",
+            bitmap_size >> 10, e->base);
+
         e->base   += bitmap_size;
         e->length -= bitmap_size;
         break;
@@ -178,12 +199,12 @@ void pmm_init(void)
         log(Fatal, "PMM: failed to place bitmap\n");
         for (;;) __asm__ volatile("hlt");
     }
-    log(Info, "PMM bitmap placed at physical address %lx, size %lu bytes\n",
-           (uint64_t)pmm_bitmap - hhdm_offset, bitmap_size);
 
+    //clear ze free lists
     for (int i = 0; i < MAX_ORDER; i++)
         free_lists[i] = NULL;
 
+    //and then build them again from the remaining usable regions
     for (uint64_t i = 0; i < memmap->entry_count; i++) {
         struct limine_memmap_entry *e = memmap->entries[i];
         if (e->type != LIMINE_MEMMAP_USABLE)
@@ -192,11 +213,11 @@ void pmm_init(void)
         uint64_t base = ALIGN_UP(e->base, PAGE_SIZE);
         uint64_t end  = ALIGN_DOWN(e->base + e->length, PAGE_SIZE);
 
-        for (uint64_t cur = base; cur < end;) {
+        for (uint64_t cur = base; cur < end; ) {
             int order = 0;
             while (order < MAX_ORDER - 1) {
                 uint64_t size = (uint64_t)PAGE_SIZE << (order + 1);
-                if (cur + size > end || cur % size != 0)
+                if (cur + size > end || (cur % size) != 0)
                     break;
                 order++;
             }
@@ -208,15 +229,21 @@ void pmm_init(void)
             pmm_list_add(order, cur);
             pmm_total_pages += (1ULL << order);
             pmm_free_pages  += (1ULL << order);
+
             cur += (uint64_t)PAGE_SIZE << order;
         }
     }
 
-    log(Info, "PMM initialized: %d bytes total, %d bytes free\n",
-           (int)(pmm_total_pages * PAGE_SIZE),
-           (int)(pmm_free_pages * PAGE_SIZE));
-}
+    if (pmm_total_pages == 0) {
+        //the ram fairy stole all the user's ram, so eat shit and DIE
+        log(Fatal, "PMM: no usable pages found\n");
+        for (;;) __asm__ volatile("hlt");
+    }
 
+    log(Ok, "PMM ready: %u MiB total, %u MiB free\n",
+        (pmm_total_pages * PAGE_SIZE) >> 20,
+        (pmm_free_pages  * PAGE_SIZE) >> 20);
+}
 uint64_t pmm_get_total_pages(void) { return pmm_total_pages; }
 uint64_t pmm_get_free_pages(void)  { return pmm_free_pages;  }
 uint64_t pmm_get_used_pages(void)  { return pmm_total_pages - pmm_free_pages; }

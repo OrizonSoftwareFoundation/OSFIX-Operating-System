@@ -9,8 +9,8 @@
 #include <string.h>
 #include <serial.h>
 #include <kprintf.h>
-#define VFS_MAX_FILESYSTEMS 200 
-#define VFS_MAX_MOUNTS      200 
+#define VFS_MAX_FILESYSTEMS 512 
+#define VFS_MAX_MOUNTS      512 
 
 static const vfs_filesystem_t *registered_fs[VFS_MAX_FILESYSTEMS];
 
@@ -50,7 +50,7 @@ void vfs_init(void)
 {
     registered_count = 0;
     mount_count = 0;
-    log(Ok, "VFS successfully initialized\n");
+    log(Ok, "Initialized VFS sucessfully, ready for filesystems\n");
 }
 
 int vfs_register_filesystem(const vfs_filesystem_t *fs)

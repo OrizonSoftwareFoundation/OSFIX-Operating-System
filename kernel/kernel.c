@@ -14,7 +14,10 @@
 #include <stdint.h>
 #include <vfs.h>
 #include <initramfs_unpacker.h>
-
+#include <apic_irq.h>
+#include <pci.h>
+#include <hci.h>
+#include <storage.h>
 //After boot, this kernel image is decompressed by the bootstub, 
 //loaded into memory, given the correct bootstructs in a process that goes from
 //limine > decompressor bootstub > kernel, then the kernel continues on its journey
@@ -66,6 +69,7 @@ void kmain(void) {
         0
     );
 
+    ktprintf("OSFIX version 0.0.1-pre-amd64\n");
 //if this doesnt get called, the time wont be aligned correctly.
 set_CPU_clock_speed();
     GDT_Initialize();
@@ -80,17 +84,19 @@ set_CPU_clock_speed();
 
     void *test_alloc = tlsf_malloc(pool, 64);
     if (test_alloc) {
-        log(Info, "Heap initialized and created heap pool at %lx\n", (uint64_t)test_alloc);
+        log(Info, "Heap initialized and created heap pool at %x\n", (uint64_t)test_alloc);
         tlsf_free(pool, test_alloc);
         kernel_tlsf_pool = pool;
     } else {
         log(Fatal, "Heap allocation failed, halting system...\n");
         for (;;) __asm__ volatile("hlt");
     }
+    APIC_IRQ_Initialize();
+    storage_init();
+    pci_init();
+    vfs_init();
 
-
-    //TODO: elf loader > scheduler and SMP > initramfs loading
-    //vfs_init();
+        //TODO: elf loader > scheduler and SMP > initramfs loading
    // initramfs_init();
     for (;;) {
         __asm__ volatile ("hlt");
