@@ -1,43 +1,60 @@
-CC        := x86_64-elf-gcc
-LD        := x86_64-elf-ld
-OBJCOPY   := x86_64-elf-objcopy
-READELF   := x86_64-elf-readelf
-NASM      := nasm
+CC := x86_64-elf-gcc
+LD := x86_64-elf-ld
+OBJCOPY := x86_64-elf-objcopy
+READELF := x86_64-elf-readelf
+NASM := nasm
 NASMFLAGS := -f elf64
 
-#only used for Lz4
-HOSTCC    := gcc
+# only used for Lz4
+HOSTCC := gcc
 
-KERNEL         := build/ckImage
-IMAGE          := OSFIX.img
-IMAGE_SIZE_MB  := 64
+KERNEL := build/ckImage
+IMAGE := OSFIX.img
+IMAGE_SIZE_MB := 64
 
+#change this to your distro's OVMF path, i'm too lazy to implement a soluton rn
 OVMF_CODE := /usr/share/OVMF/OVMF_CODE_4M.fd
 OVMF_VARS := /usr/share/OVMF/OVMF_VARS_4M.fd
 
-CFLAGS  := -Iboot/limine \
-           -Ikernel \
-           -Ikernel/utils/libs/includes \
-           -Ikernel/utils/print/includes \
-           -Ikernel/utils/misc/includes \
-           -Ikernel/utils/terminal \
-           -Ikernel/utils/decompressor/includes \
-           -Ikernel/mm/includes \
-           -Ikernel/arch/x86_64/includes \
-           -Ikernel/utils/terminal \
-           -Ikernel/utils/time/includes \
-           -Ikernel/fs/fsm/includes \
-           -Ikernel/fs/fsm/includes/initramfs \
-		   -Ikernel/drivers/storage/includes \
-		   -Ikernel/drivers/hci/includes \
-		   -Ikernel/drivers/pci/includes \
-		   -Ikernel/drivers/pic/apic/includes \
-           -Ibuild \
-           -I. \
-           -Wall -Wextra -std=gnu11 -ffreestanding -fno-stack-protector \
-           -fno-stack-check -fno-lto -fno-pie -fno-pic \
-           -m64 -march=x86-64 -mno-80387 -mno-mmx \
-           -mno-red-zone -mcmodel=kernel
+#   make = normal (kprintf.c)
+#   make LOGLEVEL=verbose = verbose (kprintf_verbose.c)
+LOGLEVEL ?= normal
+
+ifeq ($(LOGLEVEL),verbose)
+    KPRINTF_SRC := kernel/utils/print/kprintf_verbose.c
+    CFLAGS_EXTRA := -DLOG_VERBOSE
+    $(info [Makefile] Building with VERBOSE logging)
+else
+    KPRINTF_SRC := kernel/utils/print/kprintf.c
+    CFLAGS_EXTRA :=
+    $(info [Makefile] Building with NORMAL logging)
+endif
+
+CFLAGS := -Iboot/limine \
+          -Ikernel \
+          -Ikernel/utils/libs/includes \
+          -Ikernel/utils/print/includes \
+          -Ikernel/utils/misc/includes \
+          -Ikernel/utils/terminal \
+          -Ikernel/utils/decompressor/includes \
+          -Ikernel/mm/includes \
+          -Ikernel/arch/x86_64/includes \
+          -Ikernel/utils/terminal \
+          -Ikernel/utils/time/includes \
+          -Ikernel/fs/fsm/includes \
+          -Ikernel/fs/fsm/includes/initramfs \
+          -Ikernel/drivers/storage/includes \
+          -Ikernel/drivers/hci/includes \
+          -Ikernel/drivers/pci/includes \
+          -Ikernel/drivers/pic/apic/includes \
+          -Ibuild \
+          -I. \
+          -Wall -Wextra -std=gnu11 -ffreestanding -fno-stack-protector \
+          -fno-stack-check -fno-lto -fno-pie -fno-pic \
+          -m64 -march=x86-64 -mno-80387 -mno-mmx \
+          -mno-red-zone -mcmodel=kernel \
+          $(CFLAGS_EXTRA)
+
 
 # kernel compression, two-stage boot:
 
@@ -51,29 +68,36 @@ CFLAGS  := -Iboot/limine \
 #      THIS is the only thing limine ever boots. At boot it decompresses
 #      the real kernel into a reserved memory region and jumps to it.
 
-CKIMAGE_ELF     := build/kernel_real.elf
-CKIMAGE_BIN     := build/kernel_real.bin
-CKIMAGE_LZ4     := build/ckImage.lz4
-KERNEL_BLOB_OBJ     := build/kernel_blob.o
-KERNEL_META_HEADER  := build/kernel_meta.h
-LZ4ENC_HOST_TOOL    := build/lz4enc
+
+CKIMAGE_ELF := build/kernel_real.elf
+CKIMAGE_BIN := build/kernel_real.bin
+CKIMAGE_LZ4 := build/ckImage.lz4
+KERNEL_BLOB_OBJ := build/kernel_blob.o
+KERNEL_META_HEADER := build/kernel_meta.h
+LZ4ENC_HOST_TOOL := build/lz4enc
 
 CKIMAGE_LDFLAGS := -T kernel/linker.ld -nostdlib -static \
-                       -z max-page-size=0x1000 -no-pie
+                   -z max-page-size=0x1000 -no-pie
 
 STUB_LDFLAGS := -T boot/stub/linker.ld -nostdlib -static \
                 -z max-page-size=0x1000 -no-pie --no-warn-rwx-segments
 
-CKIMAGE_C_SOURCES   := $(shell find kernel -name "*.c" -not -path "kernel/utils/decompressor/*")
+CKIMAGE_C_SOURCES := $(shell find kernel -name "*.c" \
+                     -not -path "kernel/utils/decompressor/*" \
+                     -not -name "kprintf.c" \
+                     -not -name "kprintf_verbose.c")
+
+CKIMAGE_C_SOURCES += $(KPRINTF_SRC)
+
 CKIMAGE_ASM_SOURCES := $(shell find kernel -name "*.asm")
-CKIMAGE_C_OBJECTS   := $(CKIMAGE_C_SOURCES:%.c=build/%.o)
+CKIMAGE_C_OBJECTS := $(CKIMAGE_C_SOURCES:%.c=build/%.o)
 CKIMAGE_ASM_OBJECTS := $(CKIMAGE_ASM_SOURCES:%.asm=build/%.o)
-CKIMAGE_OBJECTS     := $(CKIMAGE_C_OBJECTS) $(CKIMAGE_ASM_OBJECTS)
+CKIMAGE_OBJECTS := $(CKIMAGE_C_OBJECTS) $(CKIMAGE_ASM_OBJECTS)
 
 STUB_C_SOURCES := boot/stub/stub.c \
                   kernel/utils/decompressor/lz4.c \
                   kernel/utils/libs/string.c
-STUB_OBJECTS   := $(STUB_C_SOURCES:%.c=build/%.o)
+STUB_OBJECTS := $(STUB_C_SOURCES:%.c=build/%.o)
 
 .PHONY: all clean run image
 
@@ -94,7 +118,7 @@ build/boot/stub/stub.o: $(KERNEL_META_HEADER)
 
 #/--/--/--/--/--/--/--/--/--/ Now this is where the real fun begins /--/--/--/--/--/--/--/--/--/
 
-#Stage 1: Build the main kernel
+#Stage 1: build the main kernel
 $(CKIMAGE_ELF): $(CKIMAGE_OBJECTS)
 	@mkdir -p $(dir $@)
 	@echo "  LD     $@ (real kernel)"
@@ -105,7 +129,7 @@ $(CKIMAGE_BIN): $(CKIMAGE_ELF)
 	@$(OBJCOPY) -O binary $< $@
 
 
-#Stage 2: Compress the kernel
+#Stage 2: compress the kernel
 $(LZ4ENC_HOST_TOOL): tools/lz4enc.c
 	@mkdir -p $(dir $@)
 	@echo "  HOSTCC $@"
@@ -116,7 +140,7 @@ $(CKIMAGE_LZ4): $(CKIMAGE_BIN) $(LZ4ENC_HOST_TOOL)
 	@$(LZ4ENC_HOST_TOOL) $(CKIMAGE_BIN) $(CKIMAGE_LZ4)
 
 
-#Stage 3: Shove the compressed kernel inside of an elf
+#Stage 3: shove the compressed kernel inside of an elf
 $(KERNEL_BLOB_OBJ): $(CKIMAGE_LZ4)
 	@echo "  OBJCOPY $@ (embed compressed kernel)"
 	@$(OBJCOPY) -I binary -O elf64-x86-64 -B i386:x86-64 \
@@ -135,7 +159,7 @@ $(KERNEL_META_HEADER): $(CKIMAGE_ELF) $(CKIMAGE_BIN)
 	 echo "#define CKIMAGE_RAW_SIZE $${rawsize}" >> $@
 
 
-#Stage 4: Finally, link everything together.
+#Stage 4: finally, link everything together
 $(KERNEL): $(STUB_OBJECTS) $(KERNEL_BLOB_OBJ)
 	@mkdir -p $(dir $@)
 	@echo "  LD     $@ (stub)"
@@ -145,7 +169,7 @@ $(KERNEL): $(STUB_OBJECTS) $(KERNEL_BLOB_OBJ)
 
 #End fun :(
 
-image: $(KERNEL)
+image: 
 	@rm -f $(IMAGE)
 	@dd if=/dev/zero of=$(IMAGE) bs=1M count=$(IMAGE_SIZE_MB)
 	@mkfs.fat -F 32 $(IMAGE)

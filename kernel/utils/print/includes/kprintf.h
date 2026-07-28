@@ -8,13 +8,9 @@
 #include "serial.h"
 typedef enum result_t {
     Ok,          
-
     Info,        
-
     Warn,        
-
     Fatal,       
-
     ResultCount  
 
 } result_t;
@@ -51,8 +47,8 @@ static inline const char* get_status_color(result_t status) {
     switch (status) {
         case Ok:    return COLOR_GRAY;
         case Info:  return COLOR_GRAY;
-        case Warn:  return COLOR_GRAY;
-        case Fatal: return COLOR_GRAY;
+        case Warn:  return COLOR_LIGHTYELLOW;
+        case Fatal: return COLOR_LIGHTRED;
         default:    return "";
     }
 }

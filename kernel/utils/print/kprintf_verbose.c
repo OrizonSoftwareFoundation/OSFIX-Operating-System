@@ -378,7 +378,7 @@ int kprintf(const char *format, ...) {
     char pad_char = ' ';
     int chars_written = 0;
 
-    write_both(COLOR_RESET, strlen(COLOR_RESET));
+    write_both(COLOR_DIM, strlen(COLOR_DIM));
 
     while ((c = *format++) != 0) {
         pad = 0;
@@ -508,7 +508,7 @@ int kprintf(const char *format, ...) {
 
             case 'C': {
                 const char *color = va_arg(args, const char *);
-                if (!color) color = COLOR_RESET;
+                if (!color) color = COLOR_DIM;
                 write_both(color, strlen(color));
                 continue;
             }
@@ -570,7 +570,7 @@ int ktprintf(const char *format, ...) {
     write_both(ts_buf, ts_len);
     chars_written += (int)ts_len;
 
-    write_both(COLOR_RESET, strlen(COLOR_RESET));
+    write_both(COLOR_DIM, strlen(COLOR_DIM));
 
     while ((c = *format++) != 0) {
         pad = 0;
@@ -700,7 +700,7 @@ int ktprintf(const char *format, ...) {
 
             case 'C': {
                 const char *color = va_arg(args, const char *);
-                if (!color) color = COLOR_RESET;
+                if (!color) color = COLOR_DIM;
                 write_both(color, strlen(color));
                 continue;
             }
@@ -746,9 +746,10 @@ int ktprintf(const char *format, ...) {
 
 
 void log_to_terminal(result_t status, const char *from, const char *file, int line, const char *fmt, ...) {
-    (void)from; (void)file; (void)line;
     if (!global_flanterm) return;
-    if (!fmt) return;
+    if (!from) from = "<unknown>";
+    if (!file) file = "<unknown>";
+    if (!fmt)  return;
 
     char message[1024];
     char *ptr     = message;
@@ -759,7 +760,33 @@ void log_to_terminal(result_t status, const char *from, const char *file, int li
 
     ptr = write_timestamp(ptr);
 
-    //usually there would be status modifiers here, but this is non-verbose, so i removed those -Y.T
+    const char *color = get_status_color(status);
+    SAFE_ADVANCE(strcpy_advance(ptr, color));
+    SAFE_ADVANCE(strcpy_advance(ptr, result_str[status]));
+    if (status != Info)
+        SAFE_ADVANCE(strcpy_advance(ptr, COLOR_RESET));
+
+    SAFE_ADVANCE(strcpy_advance(ptr, COLOR_GRAY));
+    SAFE_CHAR(' ');
+    SAFE_CHAR('[');
+    SAFE_ADVANCE(strcpy_advance(ptr, from));
+    SAFE_ADVANCE(strcpy_advance(ptr, " in "));
+
+    const char *last_slash = file;
+    const char *f = file;
+    while (*f) {
+        if (*f == '/' || *f == '\\') last_slash = f + 1;
+        f++;
+    }
+    SAFE_ADVANCE(strcpy_advance(ptr, last_slash));
+    SAFE_CHAR(':');
+
+    char line_str[16];
+    itoa(line, line_str, 10);
+    SAFE_ADVANCE(strcpy_advance(ptr, line_str));
+    SAFE_CHAR(']');
+    SAFE_ADVANCE(strcpy_advance(ptr, COLOR_RESET));
+    SAFE_CHAR(' ');
 
     va_list args;
     va_start(args, fmt);
@@ -780,6 +807,7 @@ void log_to_terminal(result_t status, const char *from, const char *file, int li
                 char *str = va_arg(args, char *);
                 if (str) SAFE_ADVANCE(strcpy_advance(ptr, str));
             } else if (*fmt == 'p' || *fmt == 'x') {
+
                 unsigned long val = va_arg(args, unsigned long);
                 SAFE_CHAR('0');
                 SAFE_CHAR('x');
@@ -789,6 +817,7 @@ void log_to_terminal(result_t status, const char *from, const char *file, int li
             } else if (*fmt == '%') {
                 SAFE_CHAR('%');
             } else {
+
                 SAFE_CHAR('%');
                 SAFE_CHAR(*fmt);
             }
