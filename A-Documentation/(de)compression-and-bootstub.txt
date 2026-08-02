@@ -1,7 +1,7 @@
 Author: Yazin Tantawi
 
 
-    (De)compression and Bootstub documentation
+                (De)compression & Bootstub documentation
 
 
 Many moons ago, a smart man writing a kernel decided to implement kernel compression to save space
@@ -12,9 +12,7 @@ In this text file, you will find the blood, sweat, and tears i have poured into 
 in the name of portability and compactibility.
 
 
-
 Here are some common questions i was asked when implementing kernel compression:
-
 
 
 1: Why implement kernel (de)compression?
@@ -49,7 +47,6 @@ I primarily chose LZ4 for its stupidly fast decompression rates and tunability. 
 compression algorithim on how fast you want your kernel to decompress, and how small you want your kernel.
 
 
-
 Now, onto the actual inner-workings of our decompressor.
 
 A top down explanation of how this decompressor works, the issues to fix, and a little diagram for visual learners.
@@ -74,7 +71,6 @@ Here's a diagram if you're a visual learner:
 Limine (hands access to mostly everything) -> Decompressor bootstub (hands access passed down from Limine) -> kernel 
 
 
-
 Moving onto another topic, you might be asking me "Well, what does the ELF structure look like?", and to that i respond with... another diagram.
 
 This is a very dumb'ed down version of how the ELF file is structured:
@@ -95,7 +91,6 @@ This is a very dumb'ed down version of how the ELF file is structured:
 [END]
 
 You're more than welcome to inspect the ELF with a variety of your own tools. As to me? I'm too lazy. (joke)
-
 
 
 Files related to (de)compression:

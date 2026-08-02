@@ -18,6 +18,10 @@
 #include <pci.h>
 #include <hci.h>
 #include <storage.h>
+#include <sched.h>
+#include <test_tasks.h>
+#include <syscall.h>
+
 //After boot, this kernel image is decompressed by the bootstub, 
 //loaded into memory, given the correct bootstructs in a process that goes from
 //limine > decompressor bootstub > kernel, then the kernel continues on its journey
@@ -31,9 +35,60 @@ struct flanterm_context *global_flanterm = NULL;
 
 tlsf_t kernel_tlsf_pool;
 
+#define USER_CODE_VADDR   0x0000000000400000ULL
+#define USER_STACK_VADDR  0x0000000000500000ULL
+#define PAGE_SIZE         4096
+
+
+static const uint8_t test_fork_code[] = {
+    0x48, 0xC7, 0xC0, 0x39, 0x00, 0x00, 0x00,
+    0xCD, 0x80,
+    0x48, 0x85, 0xC0,
+    0x75, 0x23,
+
+    0x48, 0xC7, 0xC7, 0x01, 0x00, 0x00, 0x00,
+    0x48, 0xBE, 0x56, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x48, 0xC7, 0xC2, 0x06, 0x00, 0x00, 0x00,
+    0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00,
+    0xCD, 0x80,
+    0xEB, 0x21,
+
+    0x48, 0xC7, 0xC7, 0x01, 0x00, 0x00, 0x00,
+    0x48, 0xBE, 0x5C, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x48, 0xC7, 0xC2, 0x07, 0x00, 0x00, 0x00,
+    0x48, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00,
+    0xCD, 0x80,
+
+    0xF3, 0x90,
+    0xEB, 0xFC,
+
+    'c','h','i','l','d','\n',
+    'p','a','r','e','n','t','\n',
+};
+
+void run_fork_test(void)
+{
+    void *code_phys = (void *)palloc();
+    void *stack_phys = (void *)palloc();
+
+    memcpy(code_phys, test_fork_code, sizeof(test_fork_code));
+    map_page(USER_CODE_VADDR, (uint64_t)code_phys, PTE_PRESENT | PTE_USER);
+    map_page(USER_STACK_VADDR, (uint64_t)stack_phys,
+             PTE_PRESENT | PTE_USER | PTE_WRITABLE);
+
+    static struct task_struct fork_task;
+    static uint8_t fork_kstack[16384] __attribute__((aligned(16)));
+
+    create_user_task(&fork_task, fork_kstack, sizeof(fork_kstack),
+                     USER_CODE_VADDR,
+                     USER_STACK_VADDR + PAGE_SIZE,
+                     0);
+    task[1] = &fork_task;
+}
 
 void kmain(void) {
     extern uint64_t boot_tsc;
+    extern void syscall_entry(void); //needed for syscalls and whatnot
     //without this, time wouldn't function and cause a triple fault
     boot_tsc = read_tsc_fast();
     struct limine_framebuffer *fb = framebuffer_request.response->framebuffers[0];
@@ -75,6 +130,9 @@ set_CPU_clock_speed();
     GDT_Initialize();
     IDT_Initialize();    
     ISR_Initialize();
+    IDT_SetGate(0x80, (void *)syscall_entry, GDT_CODE_SEGMENT, 0xEE);
+    IDT_EnableGate(0x80);
+    log(Ok, "IDT[0x80] flags immediately after set = %x\n", IDT_GetGateFlags(0x80));
     pmm_init();
     vmm_init();
     uint64_t heap_phys = palloc_order(10);
@@ -95,10 +153,23 @@ set_CPU_clock_speed();
     storage_init();
     pci_init();
     vfs_init();
+    scheduler_init();
+    // initramfs_init(); soon..
+    
+    //not needed anymore, tasks are already proven to work
+    //create_default_test_tasks();
+    //create_priority_demo_tasks();
+    //create_privileged_task_test();
+    //run_fork_test(); this works too
 
-        //TODO: elf loader > scheduler and SMP > initramfs loading
-   // initramfs_init();
-    for (;;) {
+    serial_printf("IDT[0x80] flags before jump = %x\n", IDT_GetGateFlags(0x80));
+    //run_ring3_test(); the prerequisite here being SMP, elf loading, then initramfs
+
+    while(1){
+         schedule(); //move onto next task
+         //print_task_info();
         __asm__ volatile ("hlt");
     }
 }
+
+//Why must god torture good people? Oh, wait, I'm not a good person. Nevermind then.

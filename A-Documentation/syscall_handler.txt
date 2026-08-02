@@ -1,0 +1,73 @@
+Author: Yazin Tantawi
+
+
+                Syscall Handling
+
+One of the many things a modern OS has is ring 3, more commonly known as userspace, which is a separation of privileges
+from kernel to user applications.
+The means of communication from ring 3 applications to the kernel and kernelspace drivers is via defined system calls.
+Syscalls differ from OS to OS, some may follow the POSIX/UNiX standard (https://en.wikipedia.org/wiki/POSIX), 
+others may follow the NT standard, and other others might just make their own standard out of spite or "uniqueness".
+
+Fortunately for me, i've decided to follow in the footsteps of the UNiX and Linux because i do NOT feel like creating
+my own standard and translating everything, as i'm not a masochist. You see, the reason why i followed the POSIX compatibility
+is because, well, unlike some normies, i want my OS to actually run standard applications from both UNiX and Linux natively. 
+
+Now, let's start with a little Q&A, shall we?
+
+Q: What are rings?
+A: Rings are the separation from the kernel to userspace apps. The kernel resides in ring 0, 
+while most applications reside in ring 3. See to the diagram below:
+
+        Ring 0 
+(Kernel & kernelspace drivers)
+          |
+          v
+    Ring 1 (unused)
+          |
+          v
+    Ring 2 (unused)
+          |
+          v
+        Ring 3 
+(Userspace applications)
+
+The reason why rings 1 & 2 exist was because back in the day, kernels that did not want their drivers residing in the kernel
+often opted into just putting the drivers separate of the kernel, and having the drivers communicate via pathways made specifically
+for said drivers in different privilege levels. Nowadays, they mainly sit unused because the method microkernels use is inefficient, 
+since talking to drivers in a different ring is slow compared to talking to drivers in the same ring via functions and whatnot.
+
+You might be screaming at me behind your spit-filled monitor, "yes but how do your syscalls work you time waster?", and to that i say: look below.
+
+On x86_64, we use the "syscall" instruction. To put simply: It's a single CPU instruction that, once ran, does the following events:
+
+1: If in ring 3, switch from it back to ring 0
+2: Jump to a kernel entry point (which is already in an MSR)
+3: Saves the return address in "rcx" and flags in "r11"
+
+Me personally? I chose to use the Linux System V ABI for calling convention (because i'm not a normie and like my shit to work)
+
+As seen in kernel/sys/includes/syscall.h, the syscalls are declared in a defined list called "SYSCALL_LIST" (i know, very creative name)
+After the syscalls are declared, the list does something equivalent to "extern int64_t sys_*(void);" and ships it off to wherever they're
+needed.
+
+Now, the actual syscalls are declared in kernel/sys/sys_proc.c and the external facing declarations are in kernel/sys/includes/sys_proc.h.
+Basically, the syscall functions are declared in sys_proc.c/.h, then the actual syscalls that userspace applications talk to are declared in
+syscall.c/.h and given to syscall_asm.asm in kernel/sys/includes/asm to ship to any userspace applications that are calling specific syscall 
+numbers, because as you all know, syscalls are NUMBERED!!!
+
+So, if the applications call syscall 1 for example, then the assembly syscall handler will see which syscall in the C declaration matches the 
+number, pick it out, and hand back the result from the syscall.
+
+Hopefully, this system should last many, many years to come, unless someone finds a way to break it. Then i will get pissed.
+
+
+Files related to syscall handling:
+kernel/sys/syscall.c 
+kernel/sys/sys_proc.c 
+kernel/sys/includes/syscall.h 
+kernel/sys/includes/sys_proc.h 
+kernel/sys/includes/syscall_asm.asm 
+
+
+More documentation to come.

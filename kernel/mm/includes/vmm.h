@@ -75,5 +75,6 @@ void      set_kernel_pml4(uint64_t *pml4);
 uint64_t create_user_stack(uint64_t size);
 
 uint64_t map_user_stack_with_guard(size_t stack_size);
-
+uint64_t vmm_clone_address_space(void);  
+void     vmm_switch(uint64_t cr3_phys);
 #endif

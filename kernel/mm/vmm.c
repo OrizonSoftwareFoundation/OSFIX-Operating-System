@@ -160,3 +160,50 @@ uint64_t map_user_stack_with_guard(size_t stack_size)
         map_page(addr, palloc(), PTE_PRESENT | PTE_WRITABLE | PTE_USER);
     return USER_STACK_TOP;
 }
+
+static uint64_t *clone_table_level(uint64_t *src, int level, int user_only)
+{
+    uint64_t *dst = alloc_table();
+    int start = 0, end = 512;
+
+    if (level == 4 && user_only) {
+        for (int i = 256; i < 512; i++)
+            dst[i] = src[i]; 
+        end = 256;
+    }
+
+    for (int i = start; i < end; i++) {
+        if (!(src[i] & PTE_PRESENT))
+            continue;
+
+        if (level == 1 || (src[i] & PTE_PS)) {
+            uint64_t src_phys = src[i] & ~0xFFFULL;
+            if (src[i] & PTE_PS) {
+                dst[i] = src[i];
+                continue;
+            }
+            uint64_t new_phys = palloc();
+            if (!new_phys)
+                continue;
+            memcpy(phys_to_virt(new_phys), phys_to_virt(src_phys), PAGE_SIZE);
+            dst[i] = (new_phys & ~0xFFFULL) | (src[i] & 0xFFFULL);
+            continue;
+        }
+
+        uint64_t *child_src = phys_to_virt(src[i] & ~0xFFFULL);
+        uint64_t *child_dst = clone_table_level(child_src, level - 1, 0);
+        dst[i] = (virt_to_phys(child_dst) & ~0xFFFULL) | (src[i] & 0xFFFULL);
+    }
+    return dst;
+}
+
+uint64_t vmm_clone_address_space(void)
+{
+    uint64_t *new_pml4 = clone_table_level(kernel_pml4, 4, 1);
+    return virt_to_phys(new_pml4);
+}
+
+void vmm_switch(uint64_t cr3_phys)
+{
+    load_cr3(cr3_phys);
+}

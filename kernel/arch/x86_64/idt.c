@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "includes/io.h"
 #include <kprintf.h>
-
+extern void syscall_entry(void);
 #ifndef FLAG_SET
 
 #define FLAG_SET(var, mask)   ((var) |= (mask))
@@ -59,11 +59,16 @@ void IDT_DisableGate(int interrupt) {
     FLAG_UNSET(g_IDT[interrupt].Flags, IDT_FLAG_PRESENT);
 }
 
+uint8_t IDT_GetGateFlags(int vector) {
+    return g_IDT[vector].Flags;
+}
+
 void IDT_Initialize() {
     IDT_Load(&g_IDTDescriptor);
 
     IDTDescriptor_t current;
     __asm__ volatile("sidt %0" : "=m"(current));
+
 
     if (current.Ptr == (uint64_t)g_IDTDescriptor.Ptr &&
         current.Limit == g_IDTDescriptor.Limit) {

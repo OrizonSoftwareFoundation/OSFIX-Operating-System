@@ -1,7 +1,7 @@
-CC := x86_64-elf-gcc
-LD := x86_64-elf-ld
-OBJCOPY := x86_64-elf-objcopy
-READELF := x86_64-elf-readelf
+CC := gcc
+LD := ld
+OBJCOPY := objcopy
+READELF := readelf
 NASM := nasm
 NASMFLAGS := -f elf64
 
@@ -47,6 +47,8 @@ CFLAGS := -Iboot/limine \
           -Ikernel/drivers/hci/includes \
           -Ikernel/drivers/pci/includes \
           -Ikernel/drivers/pic/apic/includes \
+		  -Ikernel/sched/includes \
+		  -Ikernel/sys/includes \
           -Ibuild \
           -I. \
           -Wall -Wextra -std=gnu11 -ffreestanding -fno-stack-protector \

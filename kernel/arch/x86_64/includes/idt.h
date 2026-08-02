@@ -33,5 +33,5 @@ void IDT_DisableGate(int interrupt);
 void IDT_EnableGate(int interrupt);
 
 void IDT_SetGate(int interrupt, void *base, uint16_t segmentDescriptor, uint8_t flags);
-
+uint8_t IDT_GetGateFlags(int vector);
 #endif
