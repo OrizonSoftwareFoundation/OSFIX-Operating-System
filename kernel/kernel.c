@@ -39,7 +39,6 @@ tlsf_t kernel_tlsf_pool;
 #define USER_STACK_VADDR  0x0000000000500000ULL
 #define PAGE_SIZE         4096
 
-
 static const uint8_t test_fork_code[] = {
     0x48, 0xC7, 0xC0, 0x39, 0x00, 0x00, 0x00,
     0xCD, 0x80,
@@ -155,15 +154,7 @@ set_CPU_clock_speed();
     vfs_init();
     scheduler_init();
     // initramfs_init(); soon..
-    
-    //not needed anymore, tasks are already proven to work
-    //create_default_test_tasks();
-    //create_priority_demo_tasks();
-    //create_privileged_task_test();
-    //run_fork_test(); this works too
-
-    serial_printf("IDT[0x80] flags before jump = %x\n", IDT_GetGateFlags(0x80));
-    //run_ring3_test(); the prerequisite here being SMP, elf loading, then initramfs
+    //run_fork_test(); //this works too
 
     while(1){
          schedule(); //move onto next task

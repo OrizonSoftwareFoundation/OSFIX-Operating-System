@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <kprintf.h>
 #include <flanterm.h>
-#include <kprintf.h>
+#include <ksyms.h>
 
 extern struct flanterm_context *global_flanterm;
 
@@ -14,6 +14,11 @@ ISRHandler_t g_ISRHandlers[256];
 extern void ISR_InitializeGates();
 
 static volatile int in_panic = 0; //stops it from panicking over and over again
+
+//lower bound for "this looks like a real return address" during the rbp-chain walk;
+//using the canonical higher-half start instead of a kernel-specific constant means this doesnt shit its pants if
+//KERNEL_VMA_OFFSET in linker.ld ever changes (which if you arent demented or just plain stupid it wont change)
+#define KADDR_MIN 0xffff800000000000ULL
 
 void ISR_Initialize() {
     ISR_InitializeGates();
@@ -45,7 +50,7 @@ static const char *exception_name(uint64_t n)
         "General protection fault",
         "Page fault",
         "Reserved",
-        "x87 floating-point exception",
+        "x87 floating-point exception",  //i didnt know x87 existed until i looked it up btw
         "Alignment check",
         "Machine check",
         "SIMD floating-point exception",
@@ -102,24 +107,36 @@ static void dump_registers(Registers_t *regs)
             cr0, cr2, cr3, cr4);
 }
 
+//prints function and address, falls back to address-only if it cant find the function (for whatever reason)
+static void print_addr(uint64_t addr)
+{
+    const KSym_t *sym = ksym_find(addr);
+    if (sym) {
+        kprintf("  [<%016llx>] %s+%llx\n", addr, sym->name, addr - sym->addr);
+    } else {
+        kprintf("  [<%016llx>] ?\n", addr);
+    }
+}
+
 static void print_call_trace(Registers_t *regs)
 {
     kprintf("\nCall Trace:\n");
     kprintf(" <TASK>\n");
 
+    print_addr(regs->rip);
+
     uint64_t *frame = (uint64_t *)regs->rbp;
     int depth = 0;
-    kprintf("  [<%016llx>] %s\n", regs->rip, "exception_entry");
 
     while (frame && depth < 20) {
         uint64_t ret = frame[1];
 
-        if (ret < 0x100000 || ret > 0xffffffff80000000ULL)
+        if (ret < KADDR_MIN)
             break;
         if (frame[0] <= (uint64_t)frame)
             break;
 
-        kprintf("  [<%016llx>]\n", ret);
+        print_addr(ret);
 
         frame = (uint64_t *)frame[0];
         depth++;
@@ -150,7 +167,14 @@ static void do_panic(Registers_t *regs, const char *extra_msg)
 
     kprintf("Oops: %04llx [#1]\n", regs->error);
     kprintf("CPU: 0, PID: 0, Comm: swapper\n");
-    kprintf("RIP: %04llx:[<%016llx>]\n", regs->cs, regs->rip);
+
+    const KSym_t *rip_sym = ksym_find(regs->rip);
+    if (rip_sym) {
+        kprintf("RIP: %04llx:[<%016llx>] %s+%llx\n",
+                regs->cs, regs->rip, rip_sym->name, regs->rip - rip_sym->addr);
+    } else {
+        kprintf("RIP: %04llx:[<%016llx>]\n", regs->cs, regs->rip);
+    }
     kprintf("Code: (no disassembly yet)\n");
 
     print_error_code(regs->interrupt, regs->error);
@@ -191,4 +215,5 @@ void ISR_RegisterHandler(int interrupt, ISRHandler_t handler)
 void kpanic(Registers_t *regs)
 {
     do_panic(regs, "Explicit kpanic() called");
+    //AAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 }

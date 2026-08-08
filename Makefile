@@ -1,7 +1,8 @@
-CC := gcc
-LD := ld
-OBJCOPY := objcopy
-READELF := readelf
+CC := x86_64-elf-gcc
+LD := x86_64-elf-ld
+OBJCOPY := x86_64-elf-objcopy
+READELF := x86_64-elf-readelf
+NM := x86_64-elf-nm
 NASM := nasm
 NASMFLAGS := -f elf64
 
@@ -72,11 +73,18 @@ CFLAGS := -Iboot/limine \
 
 
 CKIMAGE_ELF := build/kernel_real.elf
+CKIMAGE_ELF_PASS1 := build/kernel_real_pass1.elf
 CKIMAGE_BIN := build/kernel_real.bin
 CKIMAGE_LZ4 := build/ckImage.lz4
 KERNEL_BLOB_OBJ := build/kernel_blob.o
 KERNEL_META_HEADER := build/kernel_meta.h
 LZ4ENC_HOST_TOOL := build/lz4enc
+
+#kernel symbol table, used by the panic/call-trace code (kernel/arch/x86_64/isr.c)
+#to print `function_name+0xoffset` instead of bare addresses, and since the table descibes the binary its in, we link twice.
+#(see below)
+KSYMS_SRC  := kernel/utils/misc/ksyms_data.c
+KSYMS_TXT  := build/ksyms.txt
 
 CKIMAGE_LDFLAGS := -T kernel/linker.ld -nostdlib -static \
                    -z max-page-size=0x1000 -no-pie
@@ -95,6 +103,10 @@ CKIMAGE_ASM_SOURCES := $(shell find kernel -name "*.asm")
 CKIMAGE_C_OBJECTS := $(CKIMAGE_C_SOURCES:%.c=build/%.o)
 CKIMAGE_ASM_OBJECTS := $(CKIMAGE_ASM_SOURCES:%.asm=build/%.o)
 CKIMAGE_OBJECTS := $(CKIMAGE_C_OBJECTS) $(CKIMAGE_ASM_OBJECTS)
+
+#object file for the generated symbol table, so we can recompile just this
+#one file between pass 1 and pass 2 without touching anything else
+KSYMS_OBJ := $(KSYMS_SRC:%.c=build/%.o)
 
 STUB_C_SOURCES := boot/stub/stub.c \
                   kernel/utils/decompressor/lz4.c \
@@ -115,14 +127,22 @@ build/%.o: %.asm
 	@mkdir -p $(dir $@)
 	@$(NASM) $(NASMFLAGS) $< -o $@
 
-# stub.c pulls in the entry-point/size constants generated below.
+# stub.c pulls in the entry-point/size constants generated below
 build/boot/stub/stub.o: $(KERNEL_META_HEADER)
 
 #/--/--/--/--/--/--/--/--/--/ Now this is where the real fun begins /--/--/--/--/--/--/--/--/--/
 
-#Stage 1: build the main kernel
+#Stage 1: build the main kernel (two-pass, for the symbol table - see KSYMS_SRC above)
 $(CKIMAGE_ELF): $(CKIMAGE_OBJECTS)
 	@mkdir -p $(dir $@)
+	@echo "  LD     $(CKIMAGE_ELF_PASS1) (pass 1, addresses only)"
+	@$(LD) $(CKIMAGE_LDFLAGS) -o $(CKIMAGE_ELF_PASS1) $(CKIMAGE_OBJECTS)
+	@echo "  NM     $(KSYMS_TXT)"
+	@$(NM) -n $(CKIMAGE_ELF_PASS1) | awk '$$2 ~ /[Tt]/ { print $$1, $$3 }' > $(KSYMS_TXT)
+	@echo "  GEN    $(KSYMS_SRC)"
+	@python3 tools/gen_ksyms.py $(KSYMS_TXT) $(KSYMS_SRC)
+	@echo "  CC     $(KSYMS_SRC) (pass 2, with real symbol table)"
+	@$(CC) $(CFLAGS) -c $(KSYMS_SRC) -o $(KSYMS_OBJ)
 	@echo "  LD     $@ (real kernel)"
 	@$(LD) $(CKIMAGE_LDFLAGS) -o $@ $(CKIMAGE_OBJECTS)
 
@@ -193,3 +213,4 @@ run: image
 
 clean:
 	@rm -rf build $(IMAGE)
+
