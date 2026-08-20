@@ -1,8 +1,6 @@
 CC      := cc
 LD      := $(CC)
 LD_BIN  := ld
-NASM    := nasm
-NASMFLAGS := -f elf64
 
 KERNEL    := build/kernel.elf
 IMAGE     := OSFIX.img
@@ -51,6 +49,10 @@ DRIVER_CFLAGS := $(filter-out -mcmodel=kernel,$(CFLAGS)) \
 LDFLAGS := -nostdlib -static -Wl,-m,elf_x86_64 \
            -z max-page-size=0x1000 -T linker.ld
 
+# The module template rules below are evaluated before "all" is defined,
+# so make sure the default goal is the full kernel build, not a single module.
+.DEFAULT_GOAL := all
+
 
 #  Fuck you. Add a new module by appending one line here.
 #  Format: name:source_dir
@@ -70,7 +72,7 @@ EXCLUDE_PATHS := $(foreach d,$(MODULE_DIRS),! -path "./$(d)/*") ! -path "./drive
 
 C_SOURCES   := $(shell find . -name "*.c" $(EXCLUDE_PATHS)) \
                $(wildcard drivers/acpi/*.c)
-ASM_SOURCES := $(shell find . -name "*.asm" $(EXCLUDE_PATHS))
+ASM_SOURCES := $(shell find . -name "*.S" $(EXCLUDE_PATHS))
 
 OBJ := $(patsubst %.c,$(BUILD_DIR)/%.o,$(C_SOURCES)) \
        $(patsubst %.asm,$(BUILD_DIR)/%.o,$(ASM_SOURCES))
@@ -120,10 +122,10 @@ $(BUILD_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: %.asm
-	@echo "  NASM   $<"
+$(BUILD_DIR)/%.o: %.S
+	@echo "  CC     $<"
 	@mkdir -p $(dir $@)
-	@$(NASM) $(NASMFLAGS) $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 image: $(KERNEL) $(INITRAMFS)
 	@echo "Creating UEFI Disk Image... (may require sudo)"

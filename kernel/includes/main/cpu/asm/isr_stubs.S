@@ -1,26 +1,26 @@
+// @copyright (C) 2026 Orizon Software Foundation
+// @author Mejd A.
+// @license: EUPL 1.2
 
-; @copyright (C) 2026 Orizon Software Foundation
-; @author Mejd A.
-; @license: EUPL 1.2
+.section .text
+.code64
 
-section .text
-
-%macro ISR_NOERRORCODE 1
-global ISR%1
-ISR%1:
+.macro ISR_NOERRORCODE n
+.global ISR\n
+ISR\n:
     cli
-    push 0          
-    push %1         
+    push $0
+    push $\n
     jmp isr_common_stub
-%endmacro
+.endm
 
-%macro ISR_ERRORCODE 1
-global ISR%1
-ISR%1:
+.macro ISR_ERRORCODE n
+.global ISR\n
+ISR\n:
     cli
-    push %1         
+    push $\n
     jmp isr_common_stub
-%endmacro
+.endm
 
 ISR_NOERRORCODE 0
 ISR_NOERRORCODE 1
@@ -280,45 +280,45 @@ ISR_NOERRORCODE 253
 ISR_NOERRORCODE 254
 ISR_NOERRORCODE 255
 
-extern ISR_Handler
+.extern ISR_Handler
 
 isr_common_stub:
 
-    push rax
-    push rbx
-    push rcx
-    push rdx
-    push rsi
-    push rdi
-    push rbp
-    push r8
-    push r9
-    push r10
-    push r11
-    push r12
-    push r13
-    push r14
-    push r15
+    push %rax
+    push %rbx
+    push %rcx
+    push %rdx
+    push %rsi
+    push %rdi
+    push %rbp
+    push %r8
+    push %r9
+    push %r10
+    push %r11
+    push %r12
+    push %r13
+    push %r14
+    push %r15
 
-    mov rdi, rsp
+    mov %rsp, %rdi
     call ISR_Handler
 
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rbp
-    pop rdi
-    pop rsi
-    pop rdx
-    pop rcx
-    pop rbx
-    pop rax
+    pop %r15
+    pop %r14
+    pop %r13
+    pop %r12
+    pop %r11
+    pop %r10
+    pop %r9
+    pop %r8
+    pop %rbp
+    pop %rdi
+    pop %rsi
+    pop %rdx
+    pop %rcx
+    pop %rbx
+    pop %rax
 
-    add rsp, 16
+    add $16, %rsp
 
     iretq
